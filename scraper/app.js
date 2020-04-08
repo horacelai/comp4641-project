@@ -11,6 +11,7 @@ const client = asyncRedis.createClient({ host: process.env.REDIS_HOST, password:
 (async () => {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1 Mobile/15E148 Safari/604.1');
 
     page.on('response', async response => {
         const url = response.url();
