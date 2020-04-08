@@ -17,7 +17,7 @@ var CronJob = require('cron').CronJob;
 
             fetch('https://discordapp.com/api/webhooks/697464296606531644/qWhXOqRlNh5k5xNBPmDvnm36DZWFTS5DPnp3Zio2bERniBREagZa0RsazlRFB4wJew-2', {
                 method: 'post',
-                body: JSON.stringify({ 'content': `Scraping... \nThread: ${scraped_thread}/${thread}\nUser: ${scraped_user}/${user}`}),
+                body: JSON.stringify({ 'content': `\n**Thread** \nScraped: ${scraped_thread}\nPending: ${thread}\n\n**User**\nScraped: ${scraped_user}\nPending: ${user}`}),
                 headers: { 'Content-Type': 'application/json' }
             })
                 .then(res => {})
