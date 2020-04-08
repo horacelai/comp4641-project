@@ -2,12 +2,15 @@ require('dotenv').config();
 const puppeteer = require('puppeteer');
 const AWS = require('aws-sdk');
 const striptags = require('striptags');
+const asyncRedis = require("async-redis");
+const _ = require('lodash');
+const sleep = require('util').promisify(setTimeout);
+
+const client = asyncRedis.createClient({ host: process.env.REDIS_HOST, password: process.env.REDIS_PASS });
 
 (async () => {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
-    
-    scrapPage(browser, page, '1961320', 1);
 
     page.on('response', async response => {
         const url = response.url();
@@ -22,8 +25,10 @@ const striptags = require('striptags');
                     if (parseInt(data.page, 10) < parseInt(data.total_page, 10)){
                         let randomTime = Math.floor((Math.random() * 5000) + 500);
                         setTimeout(() => { scrapPage(browser, page, data.thread_id, parseInt(data.page, 10) + 1) }, randomTime);
+                    }else{
+                        obtainThread(browser, page);
                     }
-                    saveS3(data);
+                    await saveS3(data);
                 }
             }
             
@@ -32,12 +37,29 @@ const striptags = require('striptags');
             console.error(err);
         }
     });
+
+    obtainThread(browser, page);
 })();
+
+async function obtainThread(browser, page) {
+    let thread_id = await client.lpop('threads');
+    if (thread_id) {
+        let scraped = await client.sismember('scraped_threads', thread_id)
+
+        if (!scraped) {
+            await scrapPage(browser, page, thread_id, 1);
+            await client.sadd('scraped_threads', thread_id);
+        }
+    } else{
+        await sleep(10000);
+        obtainThread(browser, page);
+    }
+}
 
 //https://lihkg.com/category/5?page=1
 //https://lihkg.com/category/33
 
-function saveS3(data){
+async function saveS3(data){
     console.log('Saving data...');
     const BUCKET_NAME = process.env.AWS_S3_BUCKET;
 
@@ -47,7 +69,7 @@ function saveS3(data){
         region: 'ap-east-1'
     });
 
-    let posts = extractPost(data);
+    let posts = await extractPost(data);
 
     if(posts){
         const params = {
@@ -74,10 +96,9 @@ async function scrapPage(browser, page, thread_id, page_no) {
     });
 
     await page.waitForSelector('._104Xz-AMZKOPR1qS6fu7Xn');
-    await page.focus('#rightPanel');
 }
 
-function extractPost(response){
+async function extractPost(response){
     let posts = [];
         if (response.page === '1') {
             let post = response.item_data[0];
@@ -93,9 +114,9 @@ function extractPost(response){
                 'msg': response.title + "\n" + striptags(post.msg),
                 'like_count': response.like_count,
                 'dislike_count': response.dislike_count,
+                'create_time': response.create_time,
                 'reply_to': null
             }
-
             posts.push(data);
         }
 
@@ -115,6 +136,7 @@ function extractPost(response){
                     'msg': striptags(post.msg),
                     'like_count': post.like_count,
                     'dislike_count': post.dislike_count,
+                    'create_time': post.reply_time,
                     'reply_to': (post.quote) ? post.quote.user.user_id : op_id
                 }
 
@@ -122,5 +144,11 @@ function extractPost(response){
             }
         });
 
-        return JSON.stringify(posts);
+    let users = _.uniq(posts.map((post) => {
+            return post.user_id
+    }));
+
+    await client.rpush('users', users);
+
+    return JSON.stringify(posts);
 }
