@@ -49,6 +49,9 @@ async function obtainThread(browser, page) {
         if (!scraped) {
             await scrapPage(browser, page, thread_id, 1);
             await client.sadd('scraped_threads', thread_id);
+        }else{
+            await sleep(10000);
+            obtainThread(browser, page);
         }
     } else {
         await sleep(10000);
