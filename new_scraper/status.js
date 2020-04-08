@@ -8,7 +8,7 @@ var CronJob = require('cron').CronJob;
 
 (
     async () => {
-        var job = new CronJob('0 /10 * * * *', async function () {
+        var job = new CronJob('*/10 * * * *', async function () {
             let thread = await client.llen('threads');
             let scraped_thread = await client.scard('scraped_threads');
 
