@@ -20,14 +20,8 @@ const client = asyncRedis.createClient({ host: process.env.REDIS_HOST, password:
             const status = response.status();
             if (status === 200 && orig.startsWith('https://lihkg.com/api_v2/thread/')){
                 const json = await response.json();
-                if (json.response.thread_id && json.response.create_time > 1559318400){
+                if (json.response && json.response.thread_id && json.response.create_time > 1559318400){
                     let data = json.response;
-                    if (parseInt(data.page, 10) < parseInt(data.total_page, 10)){
-                        let randomTime = Math.floor((Math.random() * 5000) + 500);
-                        setTimeout(() => { scrapPage(browser, page, data.thread_id, parseInt(data.page, 10) + 1) }, randomTime);
-                    }else{
-                        obtainThread(browser, page);
-                    }
                     await saveS3(data);
                 }
             }
@@ -38,7 +32,17 @@ const client = asyncRedis.createClient({ host: process.env.REDIS_HOST, password:
         }
     });
 
-    obtainThread(browser, page);
+    while(true){
+        try{
+            let randomTime = Math.floor((Math.random() * 5000) + 5000);
+            await obtainThread(browser, page);
+            await sleep(randomTime);
+        }catch(e){
+            console.error(e);
+            console.log('An error occured. Sleep for 1 minute.');
+            await sleep(60000);
+        }
+    }
 })();
 
 async function obtainThread(browser, page) {
@@ -49,13 +53,7 @@ async function obtainThread(browser, page) {
         if (!scraped) {
             await scrapPage(browser, page, thread_id, 1);
             await client.sadd('scraped_threads', thread_id);
-        } else {
-            await sleep(10000);
-            obtainThread(browser, page);
         }
-    } else {
-        await sleep(10000);
-        obtainThread(browser, page);
     }
 }
 
@@ -90,6 +88,26 @@ async function saveS3(data){
     }
 }
 
+async function scrapeInfiniteScrollItems(page) {
+    try {
+        let previousHeight;
+        let times = 100;
+        while (times > 0) {
+            let currentHeight = await page.evaluate('document.body.scrollHeight');
+            if (previousHeight && currentHeight - previousHeight <= 100) {
+                break;
+            }
+            previousHeight = currentHeight;
+            await page.evaluate('window.scrollTo({top: document.body.scrollHeight,left: 0, behavior: \'smooth\'})');
+            await page.waitForFunction(`document.body.scrollHeight > ${previousHeight}`);
+            let randomTime = Math.floor((Math.random() * 5000) + 500);
+            await page.waitFor(randomTime);
+
+            times--;
+        }
+    } catch (e) { }
+}
+
 async function scrapPage(browser, page, thread_id, page_no) {
     console.log(`Scraping thread ${thread_id} page ${page_no}`);
     await page.goto(`https://lihkg.com/thread/${thread_id}/page/${page_no}`);
@@ -99,6 +117,8 @@ async function scrapPage(browser, page, thread_id, page_no) {
     });
 
     await page.waitForSelector('._104Xz-AMZKOPR1qS6fu7Xn');
+
+    await scrapeInfiniteScrollItems(page);
 }
 
 async function extractPost(response){
