@@ -9,7 +9,12 @@ const sleep = require('util').promisify(setTimeout);
 
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1 Mobile/15E148 Safari/604.1');
+    await page.setUserAgent('HKUST Scraper');
+
+    page.on('request', (request) => {
+        if (request.url().startsWith('https://lihkg.com/api_v2/'))
+            client.incr('rate');
+    });
 
     page.on('response', async response => {
         const url = response.url();
@@ -45,7 +50,6 @@ const sleep = require('util').promisify(setTimeout);
 
     while (true){
         await obtainUser(browser, page);
-        await sleep(10000);
     }
     
 })();
@@ -60,6 +64,7 @@ async function obtainUser(browser, page){
 
             console.log('Scraped user ' + user_id + ' successfully.');
             await client.sadd('scraped_user', user_id);
+            await sleep(3000);
         }
     }
 }
@@ -76,8 +81,7 @@ async function scrapeInfiniteScrollItems(page) {
             previousHeight = currentHeight;
             await page.evaluate('window.scrollTo({top: document.body.scrollHeight,left: 0, behavior: \'smooth\'})');
             await page.waitForFunction(`document.body.scrollHeight > ${previousHeight}`);
-            let randomTime = Math.floor((Math.random() * 5000) + 500);
-            await page.waitFor(randomTime);
+            await page.waitFor(3000);
 
             times--;
         }

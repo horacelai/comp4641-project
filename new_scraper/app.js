@@ -11,6 +11,12 @@ const client = asyncRedis.createClient({ host: process.env.REDIS_HOST, password:
 (async () => {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
+    await page.setUserAgent('HKUST Scraper');
+
+    page.on('request', (request) => {
+        if (request.url().startsWith('https://lihkg.com/api_v2/'))
+            client.incr('rate');
+    });
 
     page.on('response', async response => {
         const url = response.url();
@@ -34,9 +40,8 @@ const client = asyncRedis.createClient({ host: process.env.REDIS_HOST, password:
 
     while(true){
         try{
-            let randomTime = Math.floor((Math.random() * 5000) + 5000);
             await obtainThread(browser, page);
-            await sleep(randomTime);
+            await sleep(3000);
         }catch(e){
             console.error(e);
             console.log('An error occured. Sleep for 1 minute.');
@@ -100,7 +105,7 @@ async function scrapeInfiniteScrollItems(page) {
             previousHeight = currentHeight;
             await page.evaluate('window.scrollTo({top: document.body.scrollHeight,left: 0, behavior: \'smooth\'})');
             await page.waitForFunction(`document.body.scrollHeight > ${previousHeight}`);
-            let randomTime = Math.floor((Math.random() * 5000) + 500);
+            let randomTime = Math.floor(3000);
             await page.waitFor(randomTime);
 
             times--;
